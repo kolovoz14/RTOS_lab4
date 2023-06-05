@@ -25,7 +25,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdlib.h>
+#include <stdio.h>
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,6 +47,9 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
+
+extern ADC_HandleTypeDef hadc1;
+uint32_t ADC_raw;
 
 /* USER CODE END Variables */
 osThreadId defaultTaskHandle;
@@ -110,6 +115,8 @@ void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer, StackTy
   */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
+	//HAL_ADC_Start(&hadc1);
+	HAL_ADC_Start_IT(&hadc1);
 
   /* USER CODE END Init */
 
@@ -157,7 +164,7 @@ void StartDefaultTask(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    osDelay(1000);
   }
   /* USER CODE END StartDefaultTask */
 }
@@ -175,7 +182,13 @@ void StartMonitorTask(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+	  //xStreamBufferReceive();
+	  //xStreamBufferReceiveFromISR()
+	  printf("test\r\n");
+		HAL_ADC_PollForConversion(&hadc1, 10);
+		//ADC_raw = HAL_ADC_GetValue(&hadc1);
+		//printf("ADC raw= %d",ADC_raw);
+	  osDelay(1000);
   }
   /* USER CODE END StartMonitorTask */
 }
