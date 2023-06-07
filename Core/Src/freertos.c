@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include "string.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -42,14 +43,19 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
+//#define ADC_TIMER_MILISEC 1000
+uint32_t ADC_THRESHOLD_VALUE=765;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 
 extern ADC_HandleTypeDef hadc1;
+extern TIM_HandleTypeDef htim2;
 uint32_t ADC_raw;
+char ADC_messsage_recieved[ADC_MESSAGE_BYTE_LENGTH]="";
+size_t xTriggerLevelBytes=1;
+StreamBufferHandle_t ADC_messsage_buffer_handle;
 
 /* USER CODE END Variables */
 osThreadId defaultTaskHandle;
@@ -115,8 +121,6 @@ void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer, StackTy
   */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
-	//HAL_ADC_Start(&hadc1);
-	HAL_ADC_Start_IT(&hadc1);
 
   /* USER CODE END Init */
 
@@ -129,6 +133,7 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_SEMAPHORES */
 
   /* USER CODE BEGIN RTOS_TIMERS */
+
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
 
@@ -138,15 +143,24 @@ void MX_FREERTOS_Init(void) {
 
   /* Create the thread(s) */
   /* definition and creation of defaultTask */
-  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
+  osThreadDef(defaultTask, StartDefaultTask, osPriorityLow, 0, 128);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* definition and creation of monitorTask */
-  osThreadDef(monitorTask, StartMonitorTask, osPriorityIdle, 0, 400);
+  osThreadDef(monitorTask, StartMonitorTask, osPriorityIdle, 0, 512);
   monitorTaskHandle = osThreadCreate(osThread(monitorTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
+
+  //create stream buffer
+  ADC_messsage_buffer_handle=xStreamBufferCreate(ADC_MESSAGE_BYTE_LENGTH,xTriggerLevelBytes);
+
+
+  //start hardware timer
+  HAL_TIM_Base_Start(&htim2);
+  //start ADC interrupt
+  HAL_ADC_Start_IT(&hadc1);
   /* USER CODE END RTOS_THREADS */
 
 }
@@ -182,12 +196,12 @@ void StartMonitorTask(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-	  //xStreamBufferReceive();
-	  //xStreamBufferReceiveFromISR()
-	  printf("test\r\n");
-		HAL_ADC_PollForConversion(&hadc1, 10);
-		//ADC_raw = HAL_ADC_GetValue(&hadc1);
-		//printf("ADC raw= %d",ADC_raw);
+	  //xStreamBufferReceive(xStreamBuffer, pvRxData, xBufferLengthBytes, xTicksToWait);
+	  xStreamBufferReceive(ADC_messsage_buffer_handle, ADC_messsage_recieved, ADC_MESSAGE_BYTE_LENGTH, 100);
+	  if(ADC_messsage_recieved!="")
+	  {
+		  printf("MESS received from streamBuffer: %s\r\n",ADC_messsage_recieved);
+	  }
 	  osDelay(1000);
   }
   /* USER CODE END StartMonitorTask */

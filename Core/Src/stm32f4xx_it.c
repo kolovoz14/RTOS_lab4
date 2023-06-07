@@ -22,6 +22,7 @@
 #include "stm32f4xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "string.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -36,12 +37,14 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
+extern uint32_t ADC_THRESHOLD_VALUE;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-extern uint32_t ADC_raw;
+char ADC_message[]="ADC val: ";
+char ADC_messsage_send[ADC_MESSAGE_BYTE_LENGTH]="ADC val: ";
+char ADC_raw_str[5];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -56,10 +59,13 @@ extern uint32_t ADC_raw;
 
 /* External variables --------------------------------------------------------*/
 extern ADC_HandleTypeDef hadc1;
+extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim10;
 
 /* USER CODE BEGIN EV */
-
+extern StreamBufferHandle_t ADC_messsage_buffer_handle;
+extern uint32_t ADC_raw;
+extern TIM_HandleTypeDef htim2;
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -171,9 +177,17 @@ void ADC_IRQHandler(void)
   HAL_ADC_IRQHandler(&hadc1);
   /* USER CODE BEGIN ADC_IRQn 1 */
   ADC_raw=HAL_ADC_GetValue(&hadc1);
-  //printf("HAL_ADC_IRQHandler\r\n");
-  //HAL_ADC_
-  printf("ADC raw= %d\r\n",ADC_raw);
+  if(ADC_raw>=ADC_THRESHOLD_VALUE)
+	{
+	  //printf("ADC raw= %d\r\n",ADC_raw);
+	  snprintf(ADC_raw_str,5,"%d",(int)ADC_raw);
+	  strcat(ADC_messsage_send,ADC_raw_str);
+	  xStreamBufferSendFromISR(ADC_messsage_buffer_handle, ADC_messsage_send, ADC_MESSAGE_BYTE_LENGTH, NULL);
+	  //printf("message sent\r\n");
+	  strcpy(ADC_messsage_send,ADC_message);
+	}
+
+
   /* USER CODE END ADC_IRQn 1 */
 }
 
@@ -189,6 +203,20 @@ void TIM1_UP_TIM10_IRQHandler(void)
   /* USER CODE BEGIN TIM1_UP_TIM10_IRQn 1 */
 
   /* USER CODE END TIM1_UP_TIM10_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM2 global interrupt.
+  */
+void TIM2_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM2_IRQn 0 */
+
+  /* USER CODE END TIM2_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim2);
+  /* USER CODE BEGIN TIM2_IRQn 1 */
+
+  /* USER CODE END TIM2_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */
