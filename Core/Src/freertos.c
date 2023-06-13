@@ -44,7 +44,8 @@
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 //#define ADC_TIMER_MILISEC 1000
-uint32_t ADC_THRESHOLD_VALUE=765;
+//uint32_t ADC_THRESHOLD_VALUE=755;
+uint32_t ADC_THRESHOLD_VALUE=625;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -52,14 +53,37 @@ uint32_t ADC_THRESHOLD_VALUE=765;
 
 extern ADC_HandleTypeDef hadc1;
 extern TIM_HandleTypeDef htim2;
+extern I2C_HandleTypeDef hi2c1;
+
+//ADC
 uint32_t ADC_raw;
+
+// messages
+uint8_t new_message=0;
 char ADC_messsage_recieved[ADC_MESSAGE_BYTE_LENGTH]="";
-size_t xTriggerLevelBytes=1;
 StreamBufferHandle_t ADC_messsage_buffer_handle;
+size_t xTriggerLevelBytes=1;
+
+// I2C
+HAL_StatusTypeDef i2c_ret;
+uint8_t i2c_buff[16];
+
+//TMP117 sensor variables
+//uint32_t sen1_val=0;
+static const float temp_bin_to_float=0.0078125; //[C]
+static const uint8_t TMP117_addr=0x48<<1;
+static const uint8_t REG_TEMP=0x00;
+int16_t tmp117_val;
+float tmp117_temp_c=0;
+
+// VL53L0X sensor variables
+uint32_t sen2_val=0;
 
 /* USER CODE END Variables */
 osThreadId defaultTaskHandle;
 osThreadId monitorTaskHandle;
+osThreadId read_i2c_sen1Handle;
+osThreadId read_i2c_sen2Handle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -68,6 +92,8 @@ osThreadId monitorTaskHandle;
 
 void StartDefaultTask(void const * argument);
 void StartMonitorTask(void const * argument);
+void StartRead_i2c_sen1(void const * argument);
+void startRead_i2c_sen2(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -143,12 +169,20 @@ void MX_FREERTOS_Init(void) {
 
   /* Create the thread(s) */
   /* definition and creation of defaultTask */
-  osThreadDef(defaultTask, StartDefaultTask, osPriorityLow, 0, 128);
+  osThreadDef(defaultTask, StartDefaultTask, osPriorityIdle, 0, 400);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* definition and creation of monitorTask */
-  osThreadDef(monitorTask, StartMonitorTask, osPriorityIdle, 0, 512);
+  osThreadDef(monitorTask, StartMonitorTask, osPriorityNormal, 0, 512);
   monitorTaskHandle = osThreadCreate(osThread(monitorTask), NULL);
+
+  /* definition and creation of read_i2c_sen1 */
+  osThreadDef(read_i2c_sen1, StartRead_i2c_sen1, osPriorityNormal, 0, 400);
+  read_i2c_sen1Handle = osThreadCreate(osThread(read_i2c_sen1), NULL);
+
+  /* definition and creation of read_i2c_sen2 */
+  osThreadDef(read_i2c_sen2, startRead_i2c_sen2, osPriorityNormal, 0, 400);
+  read_i2c_sen2Handle = osThreadCreate(osThread(read_i2c_sen2), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -178,7 +212,8 @@ void StartDefaultTask(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1000);
+	printf("Program alive\r\n");
+    osDelay(20000);
   }
   /* USER CODE END StartDefaultTask */
 }
@@ -196,15 +231,84 @@ void StartMonitorTask(void const * argument)
   /* Infinite loop */
   for(;;)
   {
+	  //printf("Monitor Task\r\n");
 	  //xStreamBufferReceive(xStreamBuffer, pvRxData, xBufferLengthBytes, xTicksToWait);
 	  xStreamBufferReceive(ADC_messsage_buffer_handle, ADC_messsage_recieved, ADC_MESSAGE_BYTE_LENGTH, 100);
-	  if(ADC_messsage_recieved!="")
+	  //if(!strcmp(ADC_messsage_recieved,""))
+	  if(new_message)
 	  {
 		  printf("MESS received from streamBuffer: %s\r\n",ADC_messsage_recieved);
+		  new_message=0;
+		  //strcpy(ADC_messsage_recieved,"");
 	  }
 	  osDelay(1000);
   }
   /* USER CODE END StartMonitorTask */
+}
+
+/* USER CODE BEGIN Header_StartRead_i2c_sen1 */
+/**
+* @brief Function implementing the read_i2c_sen1 thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartRead_i2c_sen1 */
+void StartRead_i2c_sen1(void const * argument)
+{
+  /* USER CODE BEGIN StartRead_i2c_sen1 */
+	// sensor TMP117
+  /* Infinite loop */
+  for(;;)
+  {
+	//I2C COMUNICATION
+	i2c_buff[0]=REG_TEMP;
+	i2c_ret=HAL_I2C_Master_Transmit(&hi2c1, TMP117_addr, i2c_buff, 1, HAL_MAX_DELAY);
+	if(i2c_ret!=HAL_OK)
+	{
+		printf("i2c TX error\r\n");
+	}
+	else
+	{
+		//printf("i2c TX status HAL_OK\r\n");
+		i2c_ret=HAL_I2C_Master_Receive(&hi2c1, TMP117_addr, i2c_buff, 2,HAL_MAX_DELAY);
+		if(i2c_ret!=HAL_OK)
+		{
+			printf("i2c Rx error\r\n");
+		}
+		else
+		{
+			//printf("i2c RX status HAL_OK\r\n");
+			// connect 2 bytes into one int16
+			tmp117_val=((int16_t)i2c_buff[0]<<8 )|((i2c_buff[1]));
+
+			//Convert binary value to float temp. in Celcius degrees
+			tmp117_temp_c=tmp117_val*temp_bin_to_float;
+			printf("TMP117 temp= %f C\r\n",tmp117_temp_c);
+		}
+	}
+
+    osDelay(1000);
+  }
+  /* USER CODE END StartRead_i2c_sen1 */
+}
+
+/* USER CODE BEGIN Header_startRead_i2c_sen2 */
+/**
+* @brief Function implementing the read_i2c_sen2 thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_startRead_i2c_sen2 */
+void startRead_i2c_sen2(void const * argument)
+{
+  /* USER CODE BEGIN startRead_i2c_sen2 */
+	// sensor VL53L0X
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1000);
+  }
+  /* USER CODE END startRead_i2c_sen2 */
 }
 
 /* Private application code --------------------------------------------------*/

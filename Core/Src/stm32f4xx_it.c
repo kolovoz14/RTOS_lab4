@@ -38,11 +38,12 @@
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 extern uint32_t ADC_THRESHOLD_VALUE;
+extern uint8_t new_message;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-char ADC_message[]="ADC val: ";
+char ADC_message_clear[]="ADC val: ";
 char ADC_messsage_send[ADC_MESSAGE_BYTE_LENGTH]="ADC val: ";
 char ADC_raw_str[5];
 /* USER CODE END PV */
@@ -184,7 +185,8 @@ void ADC_IRQHandler(void)
 	  strcat(ADC_messsage_send,ADC_raw_str);
 	  xStreamBufferSendFromISR(ADC_messsage_buffer_handle, ADC_messsage_send, ADC_MESSAGE_BYTE_LENGTH, NULL);
 	  //printf("message sent\r\n");
-	  strcpy(ADC_messsage_send,ADC_message);
+	  strcpy(ADC_messsage_send,ADC_message_clear);
+	  new_message=1;
 	}
 
 
